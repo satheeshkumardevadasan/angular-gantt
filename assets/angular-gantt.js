@@ -3143,6 +3143,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             this.model = model;
             this.truncatedLeft = false;
             this.truncatedRight = false;
+            this.top = 0;
         };
 
         Task.prototype.isMilestone = function() {
@@ -3229,7 +3230,11 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 if (this.left === undefined || this.width === undefined) {
                     this.$element.css('display', 'none');
                 } else {
-                    this.$element.css({'left': this.left + 'px', 'width': this.width + 'px', 'display': ''});
+                    this.$element.css({
+                        'left': this.left + 'px',
+                        'width': this.width + 'px',
+                        'display': ''
+                    });
 
                     if (this.model.priority > 0) {
                         var priority = this.model.priority;
@@ -5426,7 +5431,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '             ng-class="row.model.classes"\n' +
         '             ng-class-odd="\'gantt-row-odd\'"\n' +
         '             ng-class-even="\'gantt-row-even\'"\n' +
-        '             ng-style="{\'height\': row.model.height}">\n' +
+        '             ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '            <div class="gantt-row-background"\n' +
         '                 ng-style="{\'background-color\': row.model.color}">\n' +
         '            </div>\n' +
@@ -5439,7 +5444,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '             ng-class="row.model.classes"\n' +
         '             ng-class-odd="\'gantt-row-odd\'"\n' +
         '             ng-class-even="\'gantt-row-even\'"\n' +
-        '             ng-style="{\'height\': row.model.height}">\n' +
+        '             ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '            <div ng-transclude class="gantt-row-content"></div>\n' +
         '        </div>\n' +
         '    </script>\n' +
@@ -5457,7 +5462,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '                         ng-class-even="\'gantt-row-even\'"\n' +
         '                         ng-class="row.model.classes"\n' +
         '                         ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id"\n' +
-        '                         ng-style="{\'height\': row.model.height}">\n' +
+        '                         ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '                        <div gantt-row-label class="gantt-row-label gantt-row-background"\n' +
         '                             ng-style="{\'background-color\': row.model.color}">\n' +
         '                        </div>\n' +

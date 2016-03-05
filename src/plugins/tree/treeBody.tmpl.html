@@ -3,7 +3,7 @@
         <div class="gantt-row-label-background">
             <div class="gantt-row-label gantt-row-height"
                  ng-class="row.model.classes"
-                 ng-style="{'height': row.model.height}"
+                 ng-style="{'height': (row.height ? row.height: row.model.height)}"
                  ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id">
                 &nbsp;
             </div>

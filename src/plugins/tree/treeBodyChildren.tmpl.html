@@ -1,7 +1,7 @@
 <div ng-controller="GanttTreeNodeController"
      class="gantt-row-label gantt-row-height"
      ng-class="row.model.classes"
-     ng-style="{'height': row.model.height}">
+     ng-style="{'height': (row.height ? row.height: row.model.height)}">
     <div class="gantt-valign-container">
         <div class="gantt-valign-content">
             <a ng-disabled="isCollapseDisabled()" data-nodrag

@@ -13,10 +13,15 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             require: '^gantt',
             scope: {
                 enabled: '=?',
-                global: '=?'
+                global: '=?',
+                stackTasks: '=?',
+                stackHeight: '=?',
+                stackHeightUnit: '=?'
             },
             link: function(scope, element, attrs, ganttCtrl) {
                 var api = ganttCtrl.gantt.api;
+                var initialStackLevel = 1;
+                var overlapCss = 'gantt-task-overlaps';
 
                 if (scope.enabled === undefined) {
                     scope.enabled = true;
@@ -24,6 +29,18 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
                 if (scope.global === undefined) {
                     scope.global = false;
+                }
+
+                if (scope.stackTasks === undefined) {
+                    scope.stackTasks = false;
+                }
+
+                if (scope.stackHeight === undefined) {
+                    scope.stackHeight = 2;
+                }
+
+                if (scope.stackHeightUnit === undefined) {
+                    scope.stackHeightUnit = 'em';
                 }
 
                 function getStartEnd(task) {
@@ -45,38 +62,66 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     return moment().range(startEnd[0], startEnd[1]);
                 }
 
-                function handleTaskOverlap(overlapsList, task) {
-                    if (!(task.model.id in overlapsList)) {
-                        task.$element.addClass('gantt-task-overlaps');
-                        overlapsList[task.model.id] = task;
+                function handleTaskOverlap(overlapsDict, overlapsList, task) {
+                    if (!(task.model.id in overlapsDict)) {
+                        task.overlaps = true;
+                        task.$element.addClass(overlapCss);
+                        overlapsList.push(task);
+                        overlapsDict[task.model.id] = task;
                     }
                 }
 
-                function handleTaskNonOverlaps(overlapsList, allTasks) {
+                function handleTaskNonOverlaps(overlapsDict, allTasks) {
                     for (var i = 0, l = allTasks.length; i < l; i++) {
                         var task = allTasks[i];
-                        if (!(task.model.id in overlapsList)) {
-                            task.$element.removeClass('gantt-task-overlaps');
+                        if (!(task.model.id in overlapsDict)) {
+                            task.overlaps = false;
+                            task.$element.removeClass(overlapCss);
                         }
                     }
                 }
 
-                function handleOverlaps(tasks) {
-                    // Assume that tasks are ordered with from date.
-                    var newOverlapsTasks = {};
+                function assignStackLevel(task, range, levels) {
+                    var addNewLevel = true;
+                    for(var level = 0, l = levels.length; level < l; level++) {
+                        if (!range.overlaps(levels[level])) {
+                            task.stackLevel = initialStackLevel+level;
+                            levels[level] = range;
+                            addNewLevel = false;
+                            break;
+                        }
+                    }
 
-                    if (tasks.length > 1) {
+                    if (addNewLevel) {
+                        task.stackLevel = initialStackLevel+levels.length;
+                        levels.push(range);
+                    }
+                }
+
+                function handleOverlaps(tasks) {
+                    var newOverlapsTasksDict = {};
+                    var newOverlapsTasks = [];
+                    var levels = [];
+
+                    if (tasks.length > 0) {
                         var previousTask = tasks[0];
                         var previousRange = getRange(previousTask);
 
-                        for (var i = 1, l = tasks.length; i < l; i++) {
+                        previousTask.stackLevel = initialStackLevel;
+                        levels.push(previousRange);
+
+                        for (var i = 1, k = tasks.length; i < k; i++) {
                             var task = tasks[i];
                             var range = getRange(task);
 
+                            // Set overlap flag to both tasks
                             if (range.overlaps(previousRange)) {
-                                handleTaskOverlap(newOverlapsTasks, task);
-                                handleTaskOverlap(newOverlapsTasks, previousTask);
+                                handleTaskOverlap(newOverlapsTasksDict, newOverlapsTasks, previousTask);
+                                handleTaskOverlap(newOverlapsTasksDict, newOverlapsTasks, task);
                             }
+
+                            // Assign stack level to current task
+                            assignStackLevel(task, range, levels);
 
                             if (previousTask.left + previousTask.width < task.left + task.width) {
                                 previousTask = task;
@@ -85,7 +130,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                         }
                     }
 
-                    handleTaskNonOverlaps(newOverlapsTasks, tasks);
+                    handleTaskNonOverlaps(newOverlapsTasksDict, tasks);
                 }
 
                 function sortOn(array, supplier) {
@@ -112,6 +157,28 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     handleOverlaps(globalTasks);
                 }
 
+                function applyStackLevel(task) {
+                    var top = (task.stackLevel - initialStackLevel) * scope.stackHeight;
+                    task.$element.css({'top': top + scope.stackHeightUnit});
+                }
+
+                function applyStackLevels(row) {
+                    if (scope.stackTasks) {
+                        var tasks = row.tasks;
+                        var maxStackLevel = initialStackLevel;
+
+                        for (var i = 0, l = tasks.length; i < l; i++) {
+                            var task = tasks[i];
+                            applyStackLevel(task);
+                            maxStackLevel = Math.max(maxStackLevel, task.stackLevel);
+                        }
+
+                        row.height = maxStackLevel * scope.stackHeight + scope.stackHeightUnit;
+                    } else {
+                        row.height = undefined;
+                    }
+                }
+
                 if (scope.enabled) {
                     api.core.on.rendered(scope, function(api) {
                         var rows = api.gantt.rowsManager.rows;
@@ -121,6 +188,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                         } else {
                             for (var i = 0; i < rows.length; i++) {
                                 handleOverlaps(rows[i].tasks);
+                                applyStackLevels(rows[i]);
                             }
                         }
                     });
@@ -131,6 +199,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             handleGlobalOverlaps(rows);
                         } else {
                             handleOverlaps(task.row.tasks);
+                            applyStackLevels(task.row);
                         }
                     });
 
@@ -140,6 +209,20 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             handleGlobalOverlaps(rows);
                         } else {
                             handleOverlaps(oldRow.tasks);
+                            applyStackLevels(task.row);
+                        }
+                    });
+
+                    api.tasks.on.displayed(scope, function(tasks, filteredTasks, visibleTasks) {
+                        for (var i = 0, l = visibleTasks.length; i < l; i++) {
+                            if (visibleTasks[i].overlaps) {
+                                var task = visibleTasks[i];
+                                task.$element.addClass(overlapCss);
+
+                                if (scope.stackTasks) {
+                                    applyStackLevel(task);
+                                }
+                            }
                         }
                     });
                 }

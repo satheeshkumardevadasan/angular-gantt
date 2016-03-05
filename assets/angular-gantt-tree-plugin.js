@@ -419,7 +419,7 @@ angular.module('gantt.tree.templates', []).run(['$templateCache', function($temp
         '        <div class="gantt-row-label-background">\n' +
         '            <div class="gantt-row-label gantt-row-height"\n' +
         '                 ng-class="row.model.classes"\n' +
-        '                 ng-style="{\'height\': row.model.height}"\n' +
+        '                 ng-style="{\'height\': (row.height ? row.height: row.model.height)}"\n' +
         '                 ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id">\n' +
         '                &nbsp;\n' +
         '            </div>\n' +
@@ -438,7 +438,7 @@ angular.module('gantt.tree.templates', []).run(['$templateCache', function($temp
         '<div ng-controller="GanttTreeNodeController"\n' +
         '     class="gantt-row-label gantt-row-height"\n' +
         '     ng-class="row.model.classes"\n' +
-        '     ng-style="{\'height\': row.model.height}">\n' +
+        '     ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '    <div class="gantt-valign-container">\n' +
         '        <div class="gantt-valign-content">\n' +
         '            <a ng-disabled="isCollapseDisabled()" data-nodrag\n' +

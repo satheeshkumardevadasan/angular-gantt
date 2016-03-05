@@ -7,6 +7,7 @@
             this.model = model;
             this.truncatedLeft = false;
             this.truncatedRight = false;
+            this.top = 0;
         };
 
         Task.prototype.isMilestone = function() {
@@ -93,7 +94,11 @@
                 if (this.left === undefined || this.width === undefined) {
                     this.$element.css('display', 'none');
                 } else {
-                    this.$element.css({'left': this.left + 'px', 'width': this.width + 'px', 'display': ''});
+                    this.$element.css({
+                        'left': this.left + 'px',
+                        'width': this.width + 'px',
+                        'display': ''
+                    });
 
                     if (this.model.priority > 0) {
                         var priority = this.model.priority;

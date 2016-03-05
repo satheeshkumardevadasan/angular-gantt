@@ -239,12 +239,10 @@
 
 .gantt-task {
     position: absolute;
-
-    margin: auto;
-    top: 0;
-    bottom: 0;
     min-width: 0.6em;
-    height: 80%;
+    height: 1.6em;
+    margin-top: 0.2em;
+    margin-bottom: 0.2em;
 }
 
 .gantt-task-milestone {
