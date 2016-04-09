@@ -7,7 +7,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 */
 (function() {
     'use strict';
-    angular.module('gantt.overlap', ['gantt', 'gantt.overlap.templates']).directive('ganttOverlap', ['moment', function(moment) {
+    angular.module('gantt.overlap', ['gantt', 'gantt.overlap.templates']).directive('ganttOverlap', ['moment', '$timeout', function(moment, $timeout) {
         return {
             restrict: 'E',
             require: '^gantt',
@@ -65,7 +65,9 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 function handleTaskOverlap(overlapsDict, overlapsList, task) {
                     if (!(task.model.id in overlapsDict)) {
                         task.overlaps = true;
-                        task.$element.addClass(overlapCss);
+                        if (task.$element) {
+                            task.$element.addClass(overlapCss);
+                        }
                         overlapsList.push(task);
                         overlapsDict[task.model.id] = task;
                     }
@@ -76,7 +78,9 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                         var task = allTasks[i];
                         if (!(task.model.id in overlapsDict)) {
                             task.overlaps = false;
-                            task.$element.removeClass(overlapCss);
+                            if (task.$element) {
+                                task.$element.removeClass(overlapCss);
+                            }
                         }
                     }
                 }
@@ -159,7 +163,9 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
                 function applyStackLevel(task) {
                     var top = (task.stackLevel - initialStackLevel) * scope.stackHeight;
-                    task.$element.css({'top': top + scope.stackHeightUnit});
+                    if (task.$element) {
+                        task.$element.css({'top': top + scope.stackHeightUnit});
+                    }
                 }
 
                 function applyStackLevels(row) {
@@ -180,17 +186,19 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 }
 
                 if (scope.enabled) {
-                    api.core.on.rendered(scope, function(api) {
-                        var rows = api.gantt.rowsManager.rows;
+                    api.data.on.change(scope, function() {
+                        $timeout(function() {
+                            var rows = api.gantt.rowsManager.rows;
 
-                        if (scope.global) {
-                            handleGlobalOverlaps(rows);
-                        } else {
-                            for (var i = 0; i < rows.length; i++) {
-                                handleOverlaps(rows[i].tasks);
-                                applyStackLevels(rows[i]);
+                            if (scope.global) {
+                                handleGlobalOverlaps(rows);
+                            } else {
+                                for (var i = 0; i < rows.length; i++) {
+                                    handleOverlaps(rows[i].tasks);
+                                    applyStackLevels(rows[i]);
+                                }
                             }
-                        }
+                        });
                     });
 
                     api.tasks.on.change(scope, function(task) {
@@ -224,6 +232,19 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                                 }
                             }
                         }
+                    });
+
+                    api.tasks.on.add(scope, function(task) {
+                        // TODO: Mimicked functionality from api.data.on.change to defer until element creation, but not ideal.  Refactor necessary to raise 'add' event after task is fully drawn.
+                        $timeout(function() {
+                            if (scope.global) {
+                                var rows = task.row.rowsManager.rows;
+                                handleGlobalOverlaps(rows);
+                            } else {
+                                handleOverlaps(task.row.tasks);
+                                applyStackLevels(task.row);
+                            }
+                        });
                     });
                 }
             }

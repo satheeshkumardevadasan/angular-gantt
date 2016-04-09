@@ -49075,6 +49075,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             this.model = model;
             this.truncatedLeft = false;
             this.truncatedRight = false;
+            this.top = 0;
         };
 
         Task.prototype.isMilestone = function() {
@@ -49161,7 +49162,11 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 if (this.left === undefined || this.width === undefined) {
                     this.$element.css('display', 'none');
                 } else {
-                    this.$element.css({'left': this.left + 'px', 'width': this.width + 'px', 'display': ''});
+                    this.$element.css({
+                        'left': this.left + 'px',
+                        'width': this.width + 'px',
+                        'display': ''
+                    });
 
                     if (this.model.priority > 0) {
                         var priority = this.model.priority;
@@ -51358,7 +51363,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '             ng-class="row.model.classes"\n' +
         '             ng-class-odd="\'gantt-row-odd\'"\n' +
         '             ng-class-even="\'gantt-row-even\'"\n' +
-        '             ng-style="{\'height\': row.model.height}">\n' +
+        '             ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '            <div class="gantt-row-background"\n' +
         '                 ng-style="{\'background-color\': row.model.color}">\n' +
         '            </div>\n' +
@@ -51371,7 +51376,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '             ng-class="row.model.classes"\n' +
         '             ng-class-odd="\'gantt-row-odd\'"\n' +
         '             ng-class-even="\'gantt-row-even\'"\n' +
-        '             ng-style="{\'height\': row.model.height}">\n' +
+        '             ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '            <div ng-transclude class="gantt-row-content"></div>\n' +
         '        </div>\n' +
         '    </script>\n' +
@@ -51389,7 +51394,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function($templateC
         '                         ng-class-even="\'gantt-row-even\'"\n' +
         '                         ng-class="row.model.classes"\n' +
         '                         ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id"\n' +
-        '                         ng-style="{\'height\': row.model.height}">\n' +
+        '                         ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '                        <div gantt-row-label class="gantt-row-label gantt-row-background"\n' +
         '                             ng-style="{\'background-color\': row.model.color}">\n' +
         '                        </div>\n' +
@@ -51468,152 +51473,204 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
 (function() {
     'use strict';
-    angular.module('gantt.dependencies', ['gantt', 'gantt.dependencies.templates']).directive('ganttDependencies', ['$timeout', '$document', 'ganttDebounce', 'GanttDependenciesManager', function($timeout, $document, debounce, DependenciesManager) {
-        return {
-            restrict: 'E',
-            require: '^gantt',
-            scope: {
-                enabled: '=?',
-                readOnly: '=?',
-                jsPlumbDefaults: '=?',
-                endpoints: '=?',
-                fallbackEndpoints: '=?'
-            },
-            link: function(scope, element, attrs, ganttCtrl) {
-                var api = ganttCtrl.gantt.api;
+    angular.module('gantt.dependencies', ['gantt', 'gantt.dependencies.templates']).directive('ganttDependencies',
+        ['$timeout', '$document', 'ganttDebounce', 'GanttDependenciesManager', 'GanttDependenciesChecker',
+            function($timeout, $document, debounce, DependenciesManager, DependenciesChecker) {
+                return {
+                    restrict: 'E',
+                    require: '^gantt',
+                    scope: {
+                        enabled: '=?',
+                        readOnly: '=?',
+                        jsPlumbDefaults: '=?',
+                        endpoints: '=?',
+                        fallbackEndpoints: '=?',
+                        conflictChecker: '=?'
+                    },
+                    link: function(scope, element, attrs, ganttCtrl) {
+                        var api = ganttCtrl.gantt.api;
 
-                // Load options from global options attribute.
-                if (scope.options && typeof(scope.options.dependencies) === 'object') {
-                    for (var option in scope.options.dependencies) {
-                        scope[option] = scope.options[option];
-                    }
-                }
-
-                if (scope.enabled === undefined) {
-                    scope.enabled = true;
-                }
-
-                if (scope.readOnly === undefined) {
-                    scope.readOnly = false;
-                }
-
-                if (scope.jsPlumbDefaults === undefined) {
-                    // https://jsplumbtoolkit.com/community/doc/defaults.html
-                    scope.jsPlumbDefaults = {
-                        Endpoint: ['Dot', {radius: 4}],
-                        EndpointStyle: {fillStyle: '#456', strokeStyle: '#456', lineWidth: 1},
-                        Connector: 'Flowchart',
-                        ConnectionOverlays: [['Arrow', {location: 1, length: 12, width: 12}]]
-                    };
-                }
-
-                function createLeftOverlay() {
-                    return angular.element('<span><span class="gantt-endpoint-overlay start-endpoint arrow-right"></span></span>');
-                }
-
-                function createRightOverlay() {
-                    return angular.element('<span><span class="gantt-endpoint-overlay end-endpoint arrow-right"></span></span>');
-                }
-
-                function createLeftFallbackOverlay() {
-                    return angular.element('<span><span class="gantt-endpoint-overlay start-endpoint fallback-endpoint"></span></span>');
-                }
-
-                function createRightFallbackOverlay() {
-                    return angular.element('<span><span class="gantt-endpoint-overlay end-endpoint fallback-endpoint"></span></span>');
-                }
-
-                if (scope.endpoints === undefined) {
-                    scope.endpoints = [
-                        {
-                            anchor: 'Left',
-                            isSource: false,
-                            isTarget: true,
-                            maxConnections: -1,
-                            cssClass: 'gantt-endpoint start-endpoint target-endpoint',
-                            overlays: [
-                                ['Custom', {create: createLeftOverlay}]
-                            ]
-
-                        },
-                        {
-                            anchor: 'Right',
-                            isSource: true,
-                            isTarget: false,
-                            maxConnections: -1,
-                            cssClass: 'gantt-endpoint end-endpoint source-endpoint',
-                            overlays: [
-                                ['Custom', {create: createRightOverlay}]
-                            ]
+                        // Load options from global options attribute.
+                        if (scope.options && typeof(scope.options.dependencies) === 'object') {
+                            for (var option in scope.options.dependencies) {
+                                scope[option] = scope.options[option];
+                            }
                         }
-                    ];
-                }
 
-                if (scope.fallbackEndpoints === undefined) {
-                    scope.fallbackEndpoints = [
-                        {
-                            endpoint: 'Blank',
-                            anchor: 'Left',
-                            isSource: false,
-                            isTarget: true,
-                            maxConnections: 0,
-                            cssClass: 'gantt-endpoint start-endpoint fallback-endpoint',
-                            overlays: [
-                                ['Custom', {create: createLeftFallbackOverlay}]
-                            ]
-                        },
-                        {
-                            endpoint: 'Blank',
-                            anchor: 'Right',
-                            isSource: true,
-                            isTarget: false,
-                            maxConnections: 0,
-                            cssClass: 'gantt-endpoint end-endpoint fallback-endpoint',
-                            overlays: [
-                                ['Custom', {create: createRightFallbackOverlay}]
-                            ]
+                        if (scope.enabled === undefined) {
+                            scope.enabled = true;
                         }
-                    ];
-                }
 
-                var manager = new DependenciesManager(ganttCtrl.gantt, scope, api);
+                        if (scope.readOnly === undefined) {
+                            scope.readOnly = false;
+                        }
 
-                api.directives.on.new(scope, function(directiveName, directiveScope, directiveElement) {
-                    if (directiveName === 'ganttBody') {
-                        manager.plumb.setContainer(directiveElement);
+                        if (scope.jsPlumbDefaults === undefined) {
+                            // https://jsplumbtoolkit.com/community/doc/defaults.html
+                            scope.jsPlumbDefaults = {
+                                Endpoint: ['Dot', {radius: 4}],
+                                EndpointStyle: {fillStyle: '#456', strokeStyle: '#456', lineWidth: 1},
+                                Connector: 'Flowchart',
+                                ConnectionOverlays: [['Arrow', {location: 1, length: 12, width: 12}]]
+                            };
+                        }
+
+                        function createLeftOverlay() {
+                            return angular.element('<span><span class="gantt-endpoint-overlay start-endpoint arrow-right"></span></span>');
+                        }
+
+                        function createRightOverlay() {
+                            return angular.element('<span><span class="gantt-endpoint-overlay end-endpoint arrow-right"></span></span>');
+                        }
+
+                        function createLeftFallbackOverlay() {
+                            return angular.element('<span><span class="gantt-endpoint-overlay start-endpoint fallback-endpoint"></span></span>');
+                        }
+
+                        function createRightFallbackOverlay() {
+                            return angular.element('<span><span class="gantt-endpoint-overlay end-endpoint fallback-endpoint"></span></span>');
+                        }
+
+                        if (scope.endpoints === undefined) {
+                            scope.endpoints = [
+                                {
+                                    anchor: 'Left',
+                                    isSource: false,
+                                    isTarget: true,
+                                    maxConnections: -1,
+                                    cssClass: 'gantt-endpoint start-endpoint target-endpoint',
+                                    overlays: [
+                                        ['Custom', {create: createLeftOverlay}]
+                                    ]
+
+                                },
+                                {
+                                    anchor: 'Right',
+                                    isSource: true,
+                                    isTarget: false,
+                                    maxConnections: -1,
+                                    cssClass: 'gantt-endpoint end-endpoint source-endpoint',
+                                    overlays: [
+                                        ['Custom', {create: createRightOverlay}]
+                                    ]
+                                }
+                            ];
+                        }
+
+                        if (scope.fallbackEndpoints === undefined) {
+                            scope.fallbackEndpoints = [
+                                {
+                                    endpoint: 'Blank',
+                                    anchor: 'Left',
+                                    isSource: false,
+                                    isTarget: true,
+                                    maxConnections: 0,
+                                    cssClass: 'gantt-endpoint start-endpoint fallback-endpoint',
+                                    overlays: [
+                                        ['Custom', {create: createLeftFallbackOverlay}]
+                                    ]
+                                },
+                                {
+                                    endpoint: 'Blank',
+                                    anchor: 'Right',
+                                    isSource: true,
+                                    isTarget: false,
+                                    maxConnections: 0,
+                                    cssClass: 'gantt-endpoint end-endpoint fallback-endpoint',
+                                    overlays: [
+                                        ['Custom', {create: createRightFallbackOverlay}]
+                                    ]
+                                }
+                            ];
+                        }
+
+                        if (scope.conflictChecker === undefined) {
+                            scope.conflictChecker = false;
+                        }
+
+                        var manager = new DependenciesManager(ganttCtrl.gantt, scope, api);
+                        var checker = new DependenciesChecker(manager, scope, api);
+
+                        scope.$watchGroup(['conflictChecker', 'enabled'], function(newValue, oldValue) {
+                            if (newValue !== oldValue) {
+                                var rows = ganttCtrl.gantt.rowsManager.rows;
+                                var allTasks = [];
+                                for (var i = 0; i < rows.length; i++) {
+                                    allTasks.push.apply(allTasks, rows[i].tasks);
+                                }
+                                if (scope.conflictChecker && scope.enabled) {
+                                    checker.refresh(allTasks);
+                                } else {
+                                    checker.clear(allTasks);
+                                }
+
+                            }
+                        });
+
+                        api.directives.on.new(scope, function(directiveName, directiveScope, directiveElement) {
+                            if (directiveName === 'ganttBody') {
+                                manager.plumb.setContainer(directiveElement);
+                            }
+                        });
+
+                        api.tasks.on.add(scope, function(task) {
+                            manager.addDependenciesFromTask(task);
+                        });
+
+                        api.tasks.on.remove(scope, function(task) {
+                            manager.removeDependenciesFromTask(task);
+                        });
+
+                        api.tasks.on.displayed(scope, debounce(function(tasks) {
+                            manager.setTasks(tasks);
+                            manager.refresh();
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh(tasks);
+                            }
+                        }));
+
+                        api.rows.on.displayed(scope, function() {
+                            manager.refresh();
+                        });
+
+                        api.tasks.on.viewChange(scope, function(task) {
+                            if (task.$element) {
+                                manager.plumb.revalidate(task.$element[0]);
+                            }
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh([task]);
+                            }
+                        });
+
+                        api.tasks.on.viewRowChange(scope, function(task) {
+                            manager.setTask(task);
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh([task]);
+                            }
+                        });
+
+                        api.dependencies.on.add(scope, function(dependency) {
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh([dependency.getFromTask(), dependency.getToTask()]);
+                            }
+                        });
+
+                        api.dependencies.on.change(scope, function(dependency) {
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh([dependency.getFromTask(), dependency.getToTask()]);
+                            }
+                        });
+
+                        api.dependencies.on.remove(scope, function(dependency) {
+                            if (scope.conflictChecker && scope.enabled) {
+                                checker.refresh([dependency.getFromTask(), dependency.getToTask()]);
+                            }
+                        });
+
+
                     }
-                });
-
-                api.tasks.on.add(scope, function(task) {
-                    manager.addDependenciesFromTask(task);
-                });
-
-                api.tasks.on.remove(scope, function(task) {
-                    manager.removeDependenciesFromTask(task);
-                });
-
-                api.tasks.on.displayed(scope, debounce(function(tasks) {
-                    manager.setTasks(tasks);
-                    manager.refresh();
-                }));
-
-                api.rows.on.displayed(scope, function() {
-                    manager.refresh();
-                });
-
-                api.tasks.on.viewChange(scope, function(task) {
-                    if (task.$element) {
-                        manager.plumb.revalidate(task.$element[0]);
-                    }
-                });
-
-                api.tasks.on.viewRowChange(scope, function(task) {
-                    manager.setTask(task);
-                });
-
-            }
-        };
-    }]);
+                };
+            }]);
 }());
 
 
@@ -51626,7 +51683,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             scope: {
                 enabled: '=?',
                 moveThreshold: '=?',
-                taskModelFactory: '=?taskFactory'
+                taskFactory: '=?'
             },
             link: function(scope, element, attrs, ganttCtrl) {
                 var api = ganttCtrl.gantt.api;
@@ -51639,11 +51696,19 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     scope.moveThreshold = 0;
                 }
 
-                if (scope.taskModelFactory === undefined) {
-                    scope.taskModelFactory = function() {
+                if (scope.taskFactory === undefined) {
+                    scope.taskFactory = function() {
                         return {}; // New empty task.
                     };
                 }
+
+                var newTaskModel = function(row) {
+                    if (row.model.drawTask && angular.isFunction(row.model.drawTask.taskFactory)) {
+                        return row.model.drawTask.taskFactory();
+                    } else {
+                        return scope.taskFactory();
+                    }
+                };
 
                 api.directives.on.new(scope, function(directiveName, directiveScope, element) {
                     if (directiveName === 'ganttRow') {
@@ -51651,7 +51716,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             var startDate = api.core.getDateByPosition(x, true);
                             var endDate = moment(startDate);
 
-                            var taskModel = scope.taskModelFactory();
+                            var taskModel = newTaskModel(directiveScope.row);
                             taskModel.from = startDate;
                             taskModel.to = endDate;
 
@@ -51674,14 +51739,22 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             };
 
                             element.on('mousemove', moveTrigger);
-                            document.one('mouseup', function() {
+                            document.on('mouseup', function() {
                                 element.off('mousemove', moveTrigger);
                             });
                         };
 
                         var drawHandler = function(evt) {
                             var evtTarget = (evt.target ? evt.target : evt.srcElement);
-                            var enabled = angular.isFunction(scope.enabled) ? scope.enabled(evt): scope.enabled;
+
+                            var rowDrawTask = directiveScope.row.model.drawTask;
+
+                            if (typeof(rowDrawTask) === 'boolean' || angular.isFunction(rowDrawTask)) {
+                                rowDrawTask = {enabled: rowDrawTask};
+                            }
+
+                            var enabledValue = utils.firstProperty([rowDrawTask], 'enabled', scope.enabled);
+                            var enabled = angular.isFunction(enabledValue) ? enabledValue(evt): enabledValue;
                             if (enabled && evtTarget.className.indexOf('gantt-row') > -1) {
                                 var x = mouseOffset.getOffset(evt).x;
 
@@ -52320,16 +52393,21 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
 (function() {
     'use strict';
-    angular.module('gantt.overlap', ['gantt', 'gantt.overlap.templates']).directive('ganttOverlap', ['moment', function(moment) {
+    angular.module('gantt.overlap', ['gantt', 'gantt.overlap.templates']).directive('ganttOverlap', ['moment', '$timeout', function(moment, $timeout) {
         return {
             restrict: 'E',
             require: '^gantt',
             scope: {
                 enabled: '=?',
-                global: '=?'
+                global: '=?',
+                stackTasks: '=?',
+                stackHeight: '=?',
+                stackHeightUnit: '=?'
             },
             link: function(scope, element, attrs, ganttCtrl) {
                 var api = ganttCtrl.gantt.api;
+                var initialStackLevel = 1;
+                var overlapCss = 'gantt-task-overlaps';
 
                 if (scope.enabled === undefined) {
                     scope.enabled = true;
@@ -52337,6 +52415,18 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
                 if (scope.global === undefined) {
                     scope.global = false;
+                }
+
+                if (scope.stackTasks === undefined) {
+                    scope.stackTasks = false;
+                }
+
+                if (scope.stackHeight === undefined) {
+                    scope.stackHeight = 2;
+                }
+
+                if (scope.stackHeightUnit === undefined) {
+                    scope.stackHeightUnit = 'em';
                 }
 
                 function getStartEnd(task) {
@@ -52358,38 +52448,70 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     return moment().range(startEnd[0], startEnd[1]);
                 }
 
-                function handleTaskOverlap(overlapsList, task) {
-                    if (!(task.model.id in overlapsList)) {
-                        task.$element.addClass('gantt-task-overlaps');
-                        overlapsList[task.model.id] = task;
+                function handleTaskOverlap(overlapsDict, overlapsList, task) {
+                    if (!(task.model.id in overlapsDict)) {
+                        task.overlaps = true;
+                        if (task.$element) {
+                            task.$element.addClass(overlapCss);
+                        }
+                        overlapsList.push(task);
+                        overlapsDict[task.model.id] = task;
                     }
                 }
 
-                function handleTaskNonOverlaps(overlapsList, allTasks) {
+                function handleTaskNonOverlaps(overlapsDict, allTasks) {
                     for (var i = 0, l = allTasks.length; i < l; i++) {
                         var task = allTasks[i];
-                        if (!(task.model.id in overlapsList)) {
-                            task.$element.removeClass('gantt-task-overlaps');
+                        if (!(task.model.id in overlapsDict)) {
+                            task.overlaps = false;
+                            if (task.$element) {
+                                task.$element.removeClass(overlapCss);
+                            }
                         }
                     }
                 }
 
-                function handleOverlaps(tasks) {
-                    // Assume that tasks are ordered with from date.
-                    var newOverlapsTasks = {};
+                function assignStackLevel(task, range, levels) {
+                    var addNewLevel = true;
+                    for(var level = 0, l = levels.length; level < l; level++) {
+                        if (!range.overlaps(levels[level])) {
+                            task.stackLevel = initialStackLevel+level;
+                            levels[level] = range;
+                            addNewLevel = false;
+                            break;
+                        }
+                    }
 
-                    if (tasks.length > 1) {
+                    if (addNewLevel) {
+                        task.stackLevel = initialStackLevel+levels.length;
+                        levels.push(range);
+                    }
+                }
+
+                function handleOverlaps(tasks) {
+                    var newOverlapsTasksDict = {};
+                    var newOverlapsTasks = [];
+                    var levels = [];
+
+                    if (tasks.length > 0) {
                         var previousTask = tasks[0];
                         var previousRange = getRange(previousTask);
 
-                        for (var i = 1, l = tasks.length; i < l; i++) {
+                        previousTask.stackLevel = initialStackLevel;
+                        levels.push(previousRange);
+
+                        for (var i = 1, k = tasks.length; i < k; i++) {
                             var task = tasks[i];
                             var range = getRange(task);
 
+                            // Set overlap flag to both tasks
                             if (range.overlaps(previousRange)) {
-                                handleTaskOverlap(newOverlapsTasks, task);
-                                handleTaskOverlap(newOverlapsTasks, previousTask);
+                                handleTaskOverlap(newOverlapsTasksDict, newOverlapsTasks, previousTask);
+                                handleTaskOverlap(newOverlapsTasksDict, newOverlapsTasks, task);
                             }
+
+                            // Assign stack level to current task
+                            assignStackLevel(task, range, levels);
 
                             if (previousTask.left + previousTask.width < task.left + task.width) {
                                 previousTask = task;
@@ -52398,7 +52520,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                         }
                     }
 
-                    handleTaskNonOverlaps(newOverlapsTasks, tasks);
+                    handleTaskNonOverlaps(newOverlapsTasksDict, tasks);
                 }
 
                 function sortOn(array, supplier) {
@@ -52425,17 +52547,44 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     handleOverlaps(globalTasks);
                 }
 
-                if (scope.enabled) {
-                    api.core.on.rendered(scope, function(api) {
-                        var rows = api.gantt.rowsManager.rows;
+                function applyStackLevel(task) {
+                    var top = (task.stackLevel - initialStackLevel) * scope.stackHeight;
+                    if (task.$element) {
+                        task.$element.css({'top': top + scope.stackHeightUnit});
+                    }
+                }
 
-                        if (scope.global) {
-                            handleGlobalOverlaps(rows);
-                        } else {
-                            for (var i = 0; i < rows.length; i++) {
-                                handleOverlaps(rows[i].tasks);
-                            }
+                function applyStackLevels(row) {
+                    if (scope.stackTasks) {
+                        var tasks = row.tasks;
+                        var maxStackLevel = initialStackLevel;
+
+                        for (var i = 0, l = tasks.length; i < l; i++) {
+                            var task = tasks[i];
+                            applyStackLevel(task);
+                            maxStackLevel = Math.max(maxStackLevel, task.stackLevel);
                         }
+
+                        row.height = maxStackLevel * scope.stackHeight + scope.stackHeightUnit;
+                    } else {
+                        row.height = undefined;
+                    }
+                }
+
+                if (scope.enabled) {
+                    api.data.on.change(scope, function() {
+                        $timeout(function() {
+                            var rows = api.gantt.rowsManager.rows;
+
+                            if (scope.global) {
+                                handleGlobalOverlaps(rows);
+                            } else {
+                                for (var i = 0; i < rows.length; i++) {
+                                    handleOverlaps(rows[i].tasks);
+                                    applyStackLevels(rows[i]);
+                                }
+                            }
+                        });
                     });
 
                     api.tasks.on.change(scope, function(task) {
@@ -52444,6 +52593,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             handleGlobalOverlaps(rows);
                         } else {
                             handleOverlaps(task.row.tasks);
+                            applyStackLevels(task.row);
                         }
                     });
 
@@ -52453,7 +52603,34 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             handleGlobalOverlaps(rows);
                         } else {
                             handleOverlaps(oldRow.tasks);
+                            applyStackLevels(task.row);
                         }
+                    });
+
+                    api.tasks.on.displayed(scope, function(tasks, filteredTasks, visibleTasks) {
+                        for (var i = 0, l = visibleTasks.length; i < l; i++) {
+                            if (visibleTasks[i].overlaps) {
+                                var task = visibleTasks[i];
+                                task.$element.addClass(overlapCss);
+
+                                if (scope.stackTasks) {
+                                    applyStackLevel(task);
+                                }
+                            }
+                        }
+                    });
+
+                    api.tasks.on.add(scope, function(task) {
+                        // TODO: Mimicked functionality from api.data.on.change to defer until element creation, but not ideal.  Refactor necessary to raise 'add' event after task is fully drawn.
+                        $timeout(function() {
+                            if (scope.global) {
+                                var rows = task.row.rowsManager.rows;
+                                handleGlobalOverlaps(rows);
+                            } else {
+                                handleOverlaps(task.row.tasks);
+                                applyStackLevels(task.row);
+                            }
+                        });
                     });
                 }
             }
@@ -52986,6 +53163,83 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 (function() {
     'use strict';
 
+    angular.module('gantt.dependencies').factory('GanttDependenciesChecker', [function() {
+        /**
+         * Creates a new DependenciesChecker object.
+         *
+         * @constructor
+         */
+        var GanttDependenciesChecker = function(manager) {
+            function handleTaskConflict(conflictsList, task) {
+                if (!(task.model.id in conflictsList) && task.$element) {
+                    task.$element.addClass('gantt-task-conflict');
+                    conflictsList[task.model.id] = task;
+                }
+            }
+
+            function handleTaskNonConflict(conflictsList, allTasks) {
+                for (var i = 0, l = allTasks.length; i < l; i++) {
+                    var task = allTasks[i];
+                    if (!(task.model.id in conflictsList) && task.$element) {
+                        task.$element.removeClass('gantt-task-conflict');
+                    }
+                }
+            }
+
+            /**
+             * Refresh the conflict status of given tasks.
+             *
+             * @param tasks
+             */
+            this.refresh = function(tasks) {
+                var allTasks = tasks.slice(0);
+                var conflictsList = [];
+
+                for (var i = 0; i < tasks.length; i++) {
+                    var taskDependencies = manager.getTaskDependencies(tasks[i]);
+
+                    for (var j = 0; j < taskDependencies.length; j++) {
+                        var dependency = taskDependencies[j];
+
+                        var fromTask = dependency.getFromTask();
+                        var toTask = dependency.getToTask();
+
+                        if (!(fromTask in allTasks)) {
+                            allTasks.push(fromTask);
+                        }
+
+                        if (!(toTask in allTasks)) {
+                            allTasks.push(toTask);
+                        }
+
+                        if (fromTask.model.to > toTask.model.from) {
+                            handleTaskConflict(conflictsList, fromTask);
+                            handleTaskConflict(conflictsList, toTask);
+                        }
+                    }
+                }
+
+                handleTaskNonConflict(conflictsList, allTasks);
+            };
+
+            /**
+             * Remove the conflict status of given tasks.
+             *
+             * @param tasks
+             */
+            this.clear = function(tasks) {
+                var allTasks = tasks.slice(0);
+                handleTaskNonConflict([], allTasks);
+            };
+
+        };
+        return GanttDependenciesChecker;
+    }]);
+}());
+
+(function() {
+    'use strict';
+
     angular.module('gantt.dependencies').factory('GanttDependenciesEvents', [function() {
         /**
          * Creates a new DependenciesEvents object.
@@ -53172,7 +53426,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 if (this.pluginScope.enabled) {
                     var taskDependencies = task.model.dependencies;
 
-                    if (taskDependencies !== undefined) {
+                    if (taskDependencies !== undefined && taskDependencies) {
                         if (!angular.isArray(taskDependencies)) {
                             taskDependencies = [taskDependencies];
                             task.model.dependencies = taskDependencies;
@@ -53320,6 +53574,18 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 }
             };
 
+            var isTaskEnabled = function(task) {
+                var rowDependencies = task.row.model.dependencies;
+                if (rowDependencies !== undefined) {
+                    return rowDependencies !== false;
+                }
+                var taskDependencies = task.model.dependencies;
+                if (taskDependencies !== undefined) {
+                    return taskDependencies !== false;
+                }
+                return true;
+            };
+
             var addTaskEndpoints = function(task) {
                 if (!task.dependencies) {
                     task.dependencies = {};
@@ -53339,13 +53605,15 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             };
 
             var removeTaskEndpoint = function(task) {
-                for (var i = 0; i < task.dependencies.endpoints.length; i++) {
-                    var endpointObject = task.dependencies.endpoints[i];
-                    self.plumb.deleteEndpoint(endpointObject);
-                    endpointObject.$task = undefined;
-                }
+                if (task.dependencies.endpoints) {
+                    for (var i = 0; i < task.dependencies.endpoints.length; i++) {
+                        var endpointObject = task.dependencies.endpoints[i];
+                        self.plumb.deleteEndpoint(endpointObject);
+                        endpointObject.$task = undefined;
+                    }
 
-                task.dependencies.endpoints = undefined;
+                    task.dependencies.endpoints = undefined;
+                }
             };
 
             var addTaskMouseHandler = function(task) {
@@ -53378,11 +53646,15 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 });
 
                 var newTasks = {};
+                var tasksList = [];
                 for (var i = 0; i < tasks.length; i++) {
                     var task = tasks[i];
-                    newTasks[task.model.id] = task;
-                    addTaskEndpoints(task);
-                    addTaskMouseHandler(task);
+                    if (isTaskEnabled(task)) {
+                        newTasks[task.model.id] = task;
+                        tasksList.push(task);
+                        addTaskEndpoints(task);
+                        addTaskMouseHandler(task);
+                    }
                 }
                 self.tasks = newTasks;
                 self.tasksList = tasks;
@@ -53422,10 +53694,12 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                         removeTaskMouseHandler(oldTask);
                         removeTaskEndpoint(oldTask);
                     }
-                    self.tasks[task.model.id] = task;
-                    addTaskEndpoints(task);
-                    addTaskMouseHandler(task);
-                    connectTaskDependencies(task);
+                    if (isTaskEnabled(task)) {
+                        self.tasks[task.model.id] = task;
+                        addTaskEndpoints(task);
+                        addTaskMouseHandler(task);
+                        connectTaskDependencies(task);
+                    }
                 } finally {
                     self.plumb.setSuspendDrawing(false, true);
                 }
@@ -54863,7 +55137,7 @@ angular.module('gantt.table.templates', []).run(['$templateCache', function($tem
         '        <div class="gantt-table-content" ng-style="getMaxHeightCss()">\n' +
         '            <div gantt-vertical-scroll-receiver>\n' +
         '                <div class="gantt-table-row" ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id" ng-controller="TableColumnRowController">\n' +
-        '                    <div gantt-row-label class="gantt-row-label gantt-row-height" ng-class="row.model.classes" ng-style="{\'height\': row.model.height}">\n' +
+        '                    <div gantt-row-label class="gantt-row-label gantt-row-height" ng-class="row.model.classes" ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '                        <div class="gantt-valign-container">\n' +
         '                            <div class="gantt-valign-content">\n' +
         '                                <span class="gantt-label-text" gantt-bind-compile-html="getRowContent()"></span>\n' +
@@ -54908,7 +55182,7 @@ angular.module('gantt.tree.templates', []).run(['$templateCache', function($temp
         '        <div class="gantt-row-label-background">\n' +
         '            <div class="gantt-row-label gantt-row-height"\n' +
         '                 ng-class="row.model.classes"\n' +
-        '                 ng-style="{\'height\': row.model.height}"\n' +
+        '                 ng-style="{\'height\': (row.height ? row.height: row.model.height)}"\n' +
         '                 ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id">\n' +
         '                &nbsp;\n' +
         '            </div>\n' +
@@ -54927,7 +55201,7 @@ angular.module('gantt.tree.templates', []).run(['$templateCache', function($temp
         '<div ng-controller="GanttTreeNodeController"\n' +
         '     class="gantt-row-label gantt-row-height"\n' +
         '     ng-class="row.model.classes"\n' +
-        '     ng-style="{\'height\': row.model.height}">\n' +
+        '     ng-style="{\'height\': (row.height ? row.height: row.model.height)}">\n' +
         '    <div class="gantt-valign-container">\n' +
         '        <div class="gantt-valign-content">\n' +
         '            <a ng-disabled="isCollapseDisabled()" data-nodrag\n' +

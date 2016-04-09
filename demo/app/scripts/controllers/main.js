@@ -159,8 +159,12 @@ angular.module('angularGanttDemoApp')
             timeFramesNonWorkingMode: 'visible',
             columnMagnet: '15 minutes',
             timeFramesMagnet: true,
-            dependencies: true,
             stackTasks: true,
+            dependencies: {
+                enabled: true,
+                conflictChecker: true
+            },
+            targetDataAddRowIndex: undefined,
             canDraw: function(event) {
                 var isLeftMouseButton = event.button === 0 || event.button === 1;
                 return $scope.options.draw && !$scope.options.readOnly && isLeftMouseButton;
@@ -365,6 +369,35 @@ angular.module('angularGanttDemoApp')
             $scope.data = [];
         };
 
+        // Add data to target row index
+        $scope.addOverlapTaskToTargetRowIndex = function() {
+            var targetDataAddRowIndex = parseInt($scope.options.targetDataAddRowIndex);
+
+            if (targetDataAddRowIndex) {
+                var targetRow = $scope.data[$scope.options.targetDataAddRowIndex];
+
+                if (targetRow && targetRow.tasks && targetRow.tasks.length > 0) {
+                    var firstTaskInRow = targetRow.tasks[0];
+                    var copiedColor = firstTaskInRow.color;
+                    var firstTaskEndDate = firstTaskInRow.to.toDate();
+                    var overlappingFromDate = new Date(firstTaskEndDate);
+
+                    overlappingFromDate.setDate(overlappingFromDate.getDate() - 1);
+
+                    var overlappingToDate = new Date(overlappingFromDate);
+
+                    overlappingToDate.setDate(overlappingToDate.getDate() + 7);
+
+                    targetRow.tasks.push({
+                        'name': 'Overlapping',
+                        'from': overlappingFromDate,
+                        'to': overlappingToDate,
+                        'color': copiedColor
+                    });
+                }
+            }
+        };
+
 
         // Visual two way binding.
         $scope.live = {};
@@ -388,6 +421,8 @@ angular.module('angularGanttDemoApp')
                 var tasks = row.tasks;
 
                 delete row.tasks;
+                delete row.drawTask;
+
                 var rowModel = $scope.live.row;
 
                 angular.extend(rowModel, row);
