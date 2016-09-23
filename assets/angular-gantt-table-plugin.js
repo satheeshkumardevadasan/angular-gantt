@@ -145,6 +145,10 @@ Github: https://github.com/angular-gantt/angular-gantt.git
         $scope.getValue = function() {
             var value = $scope.$eval($scope.column, $scope.row);
 
+            if (value === undefined) {
+                value = $scope.$eval($scope.column, $scope.row.model);
+            }
+
             var formatter = $scope.pluginScope.formatters[$scope.column];
             if (formatter !== undefined) {
                 value = formatter(value, $scope.column, $scope.row);
