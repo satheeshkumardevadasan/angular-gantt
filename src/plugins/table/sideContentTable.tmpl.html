@@ -3,8 +3,8 @@
     <div class="gantt-table-column {{getClass()}}" ng-repeat="column in pluginScope.columns" ng-controller="TableColumnController">
 
         <div class="gantt-table-header" ng-style="{height: ganttHeaderHeight + 'px'}">
-            <div ng-show="ganttHeaderHeight" class="gantt-row-label-header gantt-row-label gantt-table-row gantt-table-header-row">
-                <span class="gantt-label-text" gantt-bind-compile-html="getHeaderContent()"/>
+            <div ng-show="ganttHeaderHeight" class="gantt-row-label-header gantt-row-label gantt-table-row gantt-customtable-header-row">
+                <span class="gantt-label-text" gantt-bind-compile-html="getHeaderContent()" />
             </div>
         </div>
 
@@ -13,7 +13,7 @@
                 <div class="gantt-table-row" ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id" ng-controller="TableColumnRowController">
                     <div gantt-row-label class="gantt-row-label gantt-row-height" ng-class="row.model.classes" ng-style="{'height': row.model.height}">
                         <div class="gantt-valign-container">
-                            <div class="gantt-valign-content">
+                            <div class="">
                                 <span class="gantt-label-text" gantt-bind-compile-html="getRowContent()"></span>
                             </div>
                         </div>

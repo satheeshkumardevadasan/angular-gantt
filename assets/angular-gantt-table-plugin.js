@@ -190,8 +190,8 @@ angular.module('gantt.table.templates', []).run(['$templateCache', function($tem
         '    <div class="gantt-table-column {{getClass()}}" ng-repeat="column in pluginScope.columns" ng-controller="TableColumnController">\n' +
         '\n' +
         '        <div class="gantt-table-header" ng-style="{height: ganttHeaderHeight + \'px\'}">\n' +
-        '            <div ng-show="ganttHeaderHeight" class="gantt-row-label-header gantt-row-label gantt-table-row gantt-table-header-row">\n' +
-        '                <span class="gantt-label-text" gantt-bind-compile-html="getHeaderContent()"/>\n' +
+        '            <div ng-show="ganttHeaderHeight" class="gantt-row-label-header gantt-row-label gantt-table-row gantt-customtable-header-row">\n' +
+        '                <span class="gantt-label-text" gantt-bind-compile-html="getHeaderContent()" />\n' +
         '            </div>\n' +
         '        </div>\n' +
         '\n' +
@@ -200,7 +200,7 @@ angular.module('gantt.table.templates', []).run(['$templateCache', function($tem
         '                <div class="gantt-table-row" ng-repeat="row in gantt.rowsManager.visibleRows track by row.model.id" ng-controller="TableColumnRowController">\n' +
         '                    <div gantt-row-label class="gantt-row-label gantt-row-height" ng-class="row.model.classes" ng-style="{\'height\': row.model.height}">\n' +
         '                        <div class="gantt-valign-container">\n' +
-        '                            <div class="gantt-valign-content">\n' +
+        '                            <div class="">\n' +
         '                                <span class="gantt-label-text" gantt-bind-compile-html="getRowContent()"></span>\n' +
         '                            </div>\n' +
         '                        </div>\n' +
