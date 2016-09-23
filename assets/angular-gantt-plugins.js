@@ -3733,15 +3733,18 @@ angular.module('gantt.tree.templates', []).run(['$templateCache', function($temp
         '     ng-style="{\'height\': row.model.height}">\n' +
         '    <div class="gantt-valign-container">\n' +
         '        <div class="gantt-valign-content">\n' +
-        '            <a ng-disabled="isCollapseDisabled()" data-nodrag\n' +
+        '            <a ng-hide="isCollapseDisabled()" data-nodrag\n' +
         '               class="gantt-tree-handle-button btn btn-xs"\n' +
         '               ng-class="{\'gantt-tree-collapsed\': collapsed, \'gantt-tree-expanded\': !collapsed}"\n' +
-        '               ng-click="!isCollapseDisabled() && toggle()"><span\n' +
-        '                class="gantt-tree-handle glyphicon glyphicon-chevron-down"\n' +
-        '                ng-class="{\n' +
+        '               ng-click="!isCollapseDisabled() && toggle()">\n' +
+        '                <span class="gantt-tree-handle glyphicon glyphicon-chevron-down"\n' +
+        '                      ng-class="{\n' +
         '                \'glyphicon-chevron-right\': collapsed, \'glyphicon-chevron-down\': !collapsed,\n' +
         '                \'gantt-tree-collapsed\': collapsed, \'gantt-tree-expanded\': !collapsed}"></span>\n' +
         '            </a>\n' +
+        '            <span ng-show="isCollapseDisabled()">\n' +
+        '                &nbsp;&nbsp;&nbsp;&nbsp;\n' +
+        '            </span>\n' +
         '            <span gantt-row-label class="gantt-label-text" gantt-bind-compile-html="getRowContent()"/>\n' +
         '        </div>\n' +
         '    </div>\n' +
